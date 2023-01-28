@@ -177,4 +177,360 @@
   docker build -t otaviodioscanio/conversao-temperatura:v1 .
   ```
 
+
+
+## Aula 2
+
+- Fases do ciclo DevOps:
+  - **Planejamento**: definição do escopo do projeto. Usa-se ferramentas como o Jira, Slack e etc.
+  - **Codificação**: etapa de desenvolvimento. Git
+  - **Build**: inicia a pipeline de CI (integração contínua). Ferramentas de gerenciamento de pacote: maven, npm, nuget junto com o Docker e uma ferramenta de pipeline (Jenkins, GitHub Actions, Gitlab CI)
+  - **Teste**: equipe de QA. JUnit, SonarQube
+  - **Release**: gera o artefato de entrega a ser usado no deploy. Pode ser um arquivo executável, uma imagem docker, um arquivo .jar. Marca o fim da pipeline de CI
+  - **Deploy**: a aplicação é entregue ao ambiente. Terraform (infraestrutura como código), Ansible (gerenciamento de configuração) e serviços de cloud, como AWS, GCP, Azure. Processo automatizado por pipelines de CD (entrega contínua).
+  - **Operação**: garantia da estabilidade e de que a aplicação está no ar. É onde entra o Kubernetes.
+  - **Monitoramento**: coleta de informações da aplicação e do ambiente, para futuras melhorias. Prometheus, Elastic, Grafana.
+
+### Kubernetes
+
+- Escalabilidade e resiliência não são tarefas do Docker.
+- Indicado para aplicações de alta disponibilidade (que nunca podem cair)
+- Perfeito também para cenário de microsserviços
+  - Gerenciar serviços e escalar de maneira individual. Unifica em uma única ferramenta a gerência de todos os projetos.
+- Cluster Kubernetes: conjunto de máquinas
+  - **Kubernetes Control Plane** (master)
+    - Orquestra os nodes
+    - Importante ter mais de um para garantir a disponibilidade
+    - ![image-20230127153210377](notebook.assets/image-20230127153210377.png)
+      - *Kube API Serve*r: recebe toda a comunicação para o cluster
+      - *ETCD*: banco que armazena todos os dados do k8s. Não deve ser acessado sem o uso da API
+      - *Kube Scheduler*: determina onde cada container vai ser executado no cluster. Verifica as especificações e quais nodes podem atender a demanda
+      - *Kube Controller Manager*: gerencia todos os controladores do Kubernetes. Verifica mudanças de estado no cluster
+        - Node Controller, ReplicaSet (garante o número de réplicas definido), etc.
+  - **Kubernetes Nodes** (Work nodes)
+    - Executam os containers da aplicação
+    - ![image-20230127153753687](notebook.assets/image-20230127153753687.png)
+      - *Kubelet*: gestor do node, interage com o Kube API Server e garante a execução dos containers.
+      - *Kube Proxy*: comunicações de rede com todo o cluster
+
+- Usaremos o Docker para criar as imagens e executar fora do Kubernetes
+  - Mas dentro do Kubernetes, o Docker não é um runtime suportado (Container-d e Cri-o são)
+
+### Criando um cluster kubernetes
+
+- Soluções On-Premise
+
+  - Você tem total controle do cluster, nada é automatico.
+  - Não é ideal para iniciantes
+
+- Kubernetes como serviço
+
+  - Control plane é gerenciado pelo cloud provider. Bom para equipes enxutas
+
+- Kubernetes na máquina local
+
+  - Minikube, k3s, Microk8s, Kind e K3D
+  - Usaremos o K3D
+
+- **Instalação do K3D e Kubectl**
+
+  - Ambos são instalados por linha de comando.
+  - Kubectl é a interface de comunicação com o Kubernetes
+  - https://k3d.io
+
+- ```sh
+  k3d cluster create
+  ```
+
+  - Comando básico de criação de um cluster local baseado em containers docker.
+  - Já cria o `/.kube/config`
+  - Cria também um load balancer
+  - `--no-lb` cria sem load balancer
+
+- ```sh
+  kubectl get nodes
+  ```
+
+  - Mostra os nós
+
+- `cat /.kube/config`
+
+  - Configurações de acesso do cluster
+
+- ```sh
+  k3d node list
+  ```
+
+  - ![image-20230127161213019](notebook.assets/image-20230127161213019.png)
+
+- ```sh
+  k3d cluster list
+  ```
+
+- ```sh
+  k3d cluster create --no-lb meucluster
+  ```
+
+  - Criar sem load balancer e com um nome
+
+- ```sh
+  k3d cluster create meucluster --servers 3 --agents 3
+  ```
+
+  - Agents são os worker nodes e servers são os control planes.
+
+### Elementos fundamentais do cluster kubernetes
+
+#### Pod
+
+- Menor elemento do cluster kubernetes. É nele que os containers são executados. Funciona como uma "máquina virtual": todos os containers que rodam em um pod compartilham os mesmos recursos: filesystem e IP
+
+  - Não coloque vários containers em um mesmo Pod. Exceto se tiver um serviço acessório executando, como uma coleta de logs.
+  - Quando a aplicação for escalada, os pods são replicados, e não faz sentido replicar containers que não estão sendo demandados.
+  - ![image-20230127164625670](notebook.assets/image-20230127164625670.png)
+
+- Para criar qualquer objeto no cluster kubernetes, precisamos de um arquivo de manifesto `.yml` ou `.yaml`
+
+  - ```yml
+    # Grupo de apis que serão utilizados para o objeto (`kubectl api-resources`)
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: meupod
+    spec:
+      containers:
+      - name: site
+        image: fabricioveronez/web-page:blue
+        ports:
+        - containerPort: 80
+    ```
+
+  - ```sh
+    kubectl apply -f pod.yaml
+    ```
+
+    - ![image-20230127170913811](notebook.assets/image-20230127170913811.png)
+    - Ready indica a quantidade de containers
+
+  - ```sh
+    kubectl describe pod meupod
+    ```
+
+- Como acessar o pod: parecido com o port-binding do docker
+
+  - ```sh
+    kubectl port-forward pod/meupod 8080:80
+    ```
+
+    - Lembrando que a ordem das portas é host:pod
+    - O pod não precisou ser criado novamente para realizar este mapeamento.
+
+- ```sh
+  kubectl delete pod meupod
+  ```
+
+  - Uma vez deletado, acabou. Precisa de um replicaset para gerenciar
+
+- Obs: Label e selector
+
+  - No kubernetes, interagimos com elementos por meio de labels e selectors
+
+  - **Label**: elemento chave-valor colocado no manifesto para marcar o objeto.
+
+    - ```yml
+      # ...
+      metadata:
+        name: meupod-azul
+        labels:
+          cor: azul
+      spec:
+      # ...
+      ```
+
+  - **Selector**: seleciona objetos com base na label deles (que pode ser a mesma para vários).
+
+    - ```sh
+      kubectl get pods -l cor=azul
+      ```
+
+    - ![image-20230127174433590](notebook.assets/image-20230127174433590.png)
+
+- ```sh
+  kubectl delete -f pod.yaml
+  ```
+
+  - Deleta os objetos especificados no arquivo.
+
+#### ReplicaSet 
+
+- Garante a escalabilidade e resiliência da aplicação gerenciando os **pods**.
+
+- Controlador que garante que o número de réplicas correntes seja igual ao número de réplicas desejadas. Ele sobe ou derruba pods.
+
+- ```yaml
+  # diferente do pod. Conferir em `kubectl api-resources`
+  apiVersion: apps/v1
+  kind: ReplicaSet
+  metadata:
+    name: meureplicaset
+  spec:
+    replicas: 5
+    # selecionar os pods que este ReplicaSet vai gerenciar
+    selector:
+      matchLabels:
+        app: web
+    template:
+      metadata:
+        labels:
+          cor: azul
+          # deve ter o mesmo nome do seletor do ReplicaSet
+          app: web
+      spec:
+        containers:
+        - name: site
+          image: fabricioveronez/web-page:blue
+          ports:
+          - containerPort: 80
+  ```
+
+- ```sh
+  kubectl get replicaset
+  ```
+
+  - ![image-20230127191309582](notebook.assets/image-20230127191309582.png)
+
+- ```sh
+  kubectl describe replicaset meureplicaset
+  ```
+
+- ```
+  kubectl delete pod meureplicaset-q6hf4
+  ```
+
+  - Um novo é criado em seguida
+
+- A mudança de imagem no manifesto não reflete alteração nos pods já de pé. Ao dar um describe no ReplicaSet, vê-se que a imagem template muda, mas somente será aplicada aos novos pods.
+
+  - Para comprovar, é possível dar um describe em um pod e verificar que ele ainda usa a imagem antiga.
+  - Não faz sentido excluir manualmente os pods. Quem faz esta atualização é um outro controlador do kubernetes: o Deployment.
+
+#### Deployment
+
+- Gerencia as versões do ReplicaSet
+
+- A versão nova do ReplicaSet cria pods progressivamente, enquanto a antiga perde pods. A antiga não é deletada.
+
+- ```yml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: meudeployment
+    # cria um replicaset de forma implícita. O nome é concatenado pois podem existir vários replicasets a partir desde deployment
+  spec:
+    replicas: 5
+    selector:
+      matchLabels:
+        app: web
+    template:
+      metadata:
+        labels:
+          cor: azul
+          app: web
+      spec:
+        containers:
+        - name: site
+          image: fabricioveronez/web-page:blue
+          ports:
+          - containerPort: 80
+  ```
+
+- Mudar a imagem muda o replicaset (gera um versionamento dele)
+
+  - Simplesmente alterar o número de réplicas do pod não altera o replicaset (pods são simplesmente removidos e criados para atingir o valor desejado, mas não há necessidade de serem recriados, pois o molde é o mesmo)
+
+  - **Mas, ao mudar a imagem, o deployment aplica progressivamente a nova imagem aos pods**, destruindo-os e recriando, até todos os pods serem do mesmo replicaset. O replicaset é como um molde para a criação de pods.
+
+  - ![image-20230127222627838](notebook.assets/image-20230127222627838.png)
+
+    - Repare o replicaset antigo: ele ainda existe, mas não possui pods.
+
+    - É possível fazer o rollback para o deployment antigo com o seguinte comando:
+
+      - ```sh
+        kubectl rollout undo deployment meudeployment
+        ```
+
+      - Assim, ele recria os pods no molde antigo. 
+
+- `kubectl port-forward pod/meudeployment-6b6c98f6bf-q7jz6 8081:80`
+
+- Não adianta ter pods replicados se as requisições não são balanceadas entre eles. 
+
+#### Service
+
+- É o elemento que permite a comunicação entre pods (cenário de microsserviços) e o cluster com a internet.
+
+- Tipos de Service (há outros)
+
+  - **ClusterIP**: gera a comunicação interna no cluster kubernetes. 
+    - Possui seu IP, mas não vamos precisar usar o IP quando mexemos com containers. 
+    - Não há comunicação externa.
+    - ![image-20230127224103708](notebook.assets/image-20230127224103708.png)
+  - **NodePort**: possibilita expor os serviços externamente
+    - Expõe uma porta em cada nó do cluster kubernetes.
+    - Basta usar um IP de um dos nós (qualquer um) do cluster para acessar o serviço e todos os pods.
+      - Ele elege uma porta entre 30000 e 32767
+    - ![image-20230127224135138](notebook.assets/image-20230127224135138.png)
+  - **LoadBalancer**
+    - Service que cria um IP público para acesso a ele. É utilizado, na maioria dos casos, quando o cluster está em um provedor cloud.
+    - Dá para ter em ambiente on-premise com algumas ferramentas, mas não faz tanto sentido.
+
+- ```yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: web-page
+  spec:
+    # todos os pods com a label web serão expostos por este serviço
+    selector:
+      app: web
+    ports:
+      - port: 80
+        protocol: TCP
+    type: NodePort
+  ```
+
+- ```sh
+  kubectl get service
+  ```
+
+- ```sh
+  k3d cluster delete meucluster
+  k3d cluster create meucluster -p "8081:30000@loadbalancer"
+  ```
+
   
+
+> Resumo aula 2
+
+| Comando k3d                     | O que faz                         |
+| ------------------------------- | --------------------------------- |
+| `k3d cluster create meucluster` | Cria um cluster com load balancer |
+| `k3s cluster list`              | Mostra todos os clusters          |
+| `k3d node list`                 | Lista os nós do cluster           |
+| `k3d cluster delete meucluster` | Deleta um cluster                 |
+
+| Comando kubectl                                 | O que faz                                                    |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| `kubectl get nodes`                             | Lista os nós do cluster com outras informações               |
+| `kubectl apply -f pod.yaml`                     | Cria ou atualiza objetos com base num arquivo de manifesto   |
+| `kubectl describe pod meupod`                   | Fornece informações como o nó em que o pod está executando, log de eventos, IP, porta, etc. |
+| `kubectl delete pod meupod`                     | Deleta pelo nome                                             |
+| `kubectl delete -f pod.yaml`                    | Deleta com base em um arquivo de manifesto (usado anteriormente para criar os objetos) |
+| `kubectl get pods -l cor=azul`                  | Obtém os pods filtrando por seletor                          |
+| `kubectl get replicaset`                        |                                                              |
+| `kubectl describe replicaset meureplicaset`     |                                                              |
+| `kubectl describe deployment meudeployment`     |                                                              |
+| `kubectl rollout undo deployment meudeployment` |                                                              |
+| `kubectl port-forward pod/meupod 8080:80`       |                                                              |
+| `kubectl get all`                               |                                                              |

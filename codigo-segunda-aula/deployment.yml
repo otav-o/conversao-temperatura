@@ -1,0 +1,38 @@
+# diferente do pod. Conferir em `kubectl api-resources`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meudeployment
+  # já cria um replicaset implicitamente
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        cor: azul
+        app: web
+    spec:
+      containers:
+      - name: site
+        image: fabricioveronez/web-page:blue
+        ports:
+        - containerPort: 80
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-page
+spec:
+  # todos os pods com a label web serão expostos por este serviço
+  selector:
+    app: web
+  ports:
+    - port: 80
+      protocol: TCP
+      nodePort: 30000
+  type: NodePort

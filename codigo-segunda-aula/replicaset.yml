@@ -1,0 +1,23 @@
+# diferente do pod. Conferir em `kubectl api-resources`
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: meureplicaset
+spec:
+  replicas: 5
+  # selecionar os pods que este ReplicaSet vai gerenciar
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        cor: azul
+        # deve ter o mesmo nome do seletor do ReplicaSet
+        app: web
+    spec:
+      containers:
+      - name: site
+        image: fabricioveronez/web-page:green
+        ports:
+        - containerPort: 80
