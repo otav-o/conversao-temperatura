@@ -752,3 +752,52 @@
 
 - Observação: o código da aula está melhor do que mostrado neste exemplo, pois possui variáveis definidas em outro arquivo (`terraform.tfvars`)
 
+## Aula 4
+
+- Automação com Jenkins
+- Pipeline (encanamento): condução do fluxo de tarefas na direção correta.
+  - **Pipeline de integração continua (CI)**: lançar releases da aplicação. O controle da qualidade desde o commit do desenvolvedor até o deploy.
+    - ![image-20230129171326490](notebook.assets/image-20230129171326490.png)
+  - **Pipeline de Entrega Contínua (CD)**: entregar a release já feita. A partir do pacote da release.
+    - ![image-20230129171526572](notebook.assets/image-20230129171526572.png)
+
+### Jenkins
+
+- Opensource, lançado em 2005, escrito em Java, extensível (possui vários plugins), linguagem de pipeline feita em Groovy, interface amigável de gerenciamento, trabalha com múltiplos versionadores, pode ser usado em qualquer ambiente cloud, uma das soluções de pipeline mais utilizadas no mercado.
+- Instalar na máquina, não em containers
+- No cenário ideal: há os agentes (execução das pipelines) e o orquestrador, mas aqui usaremos apenas uma máquina
+
+### Projeto da aula
+
+- Disparar, a cada commit, a pipeline que vai gerar a imagem docker e entregar automaticamente no cluster kubernetes.
+
+- Subir toda a infraestrutura com Terraform e acessar via ssh o ip do cluster
+
+  - ```bash
+    ssh -i ~/.ssh/digital_ocean_1 root@167.71.16.6
+    apt update && apt install openjdk-17-jdk -y
+    # seguir o restante da documentação do jenkins
+    ```
+
+- Instalar o docker e o kubectl
+
+  - ```bash
+    curl -fsSL https://get.docker.com | sh
+    usermod -aG docker jenkins
+    systemctl restart jenkins
+    # instalar o kubectl
+    ```
+
+- Entrar no navegador pelo IP e na porta 8080. Configurar por lá
+
+  - Instalar os plugins Docker, Docker Pipeline, Kubernetes CLI
+  - Configurar uma pipeline simples
+    - ![image-20230129175147926](notebook.assets/image-20230129175147926.png)
+
+- [Acesse o código do Jenkinsfile aqui](https://github.com/otav-o/kube-news/blob/main/Jenkinsfile)
+  - Adicionar as variáveis diretamente no console do Jenkins, sendo o kubeconfig o upload de um arquivo.
+- ![image-20230129185123368](notebook.assets/image-20230129185123368.png)
+- ![image-20230129184123631](notebook.assets/image-20230129184123631.png)
+  - ![image-20230129184008597](notebook.assets/image-20230129184008597.png)
+  - Build automático após o push
+
