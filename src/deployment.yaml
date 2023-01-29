@@ -1,0 +1,36 @@
+## Desafio aula 2: Deploy em um cluster kubernetes
+# Demonstração de funcionamento na Digital Ocean (screenshot): https://imgur.com/a/ZU2Hfr5
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: desafio-2
+spec:
+  selector:
+    matchLabels:
+      app: desafio-2
+  template:
+    metadata:
+      labels:
+        app: desafio-2
+    spec:
+      containers:
+        - name: site
+          image: otaviodioscanio/conversao-temperatura:v1
+          ports:
+          - containerPort: 8080
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app: desafio-2
+  ports:
+    # expõe na porta 80 o container que está rodando na 8080 (que é do deployment)
+    - port: 80
+      targetPort: 8080
+  type: LoadBalancer
