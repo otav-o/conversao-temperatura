@@ -31,7 +31,7 @@
   docker container run hello-world
   ```
 
-  - Executa um container. Faz pull da imagem se ela não existit localmente.
+  - Executa um container. Faz pull da imagem se ela não existir localmente.
   - `--name` para dar um nome ao container (senão o Docker cria um aleatório)
   - `--rm` para que o container se exclua automaticamente ao ser parado
   - `--it` para o modo interativo
@@ -448,7 +448,7 @@
 
   - Simplesmente alterar o número de réplicas do pod não altera o replicaset (pods são simplesmente removidos e criados para atingir o valor desejado, mas não há necessidade de serem recriados, pois o molde é o mesmo)
 
-  - **Mas, ao mudar a imagem, o deployment aplica progressivamente a nova imagem aos pods**, destruindo-os e recriando, até todos os pods serem do mesmo replicaset. O replicaset é como um molde para a criação de pods.
+  - **Mas, ao mudar a imagem, o deployment aplica progressivamente a nova imagem aos pods**, destruindo-os e recriando, até todos os pods serem do mesmo replicaset.
 
   - ![image-20230127222627838](notebook.assets/image-20230127222627838.png)
 
@@ -464,7 +464,7 @@
 
 - `kubectl port-forward pod/meudeployment-6b6c98f6bf-q7jz6 8081:80`
 
-- Não adianta ter pods replicados se as requisições não são balanceadas entre eles. 
+- Não adianta ter pods replicados se as requisições não são balanceadas entre eles. Para isto, usamos o Service.
 
 #### Service
 
@@ -534,3 +534,221 @@
 | `kubectl rollout undo deployment meudeployment` |                                                              |
 | `kubectl port-forward pod/meupod 8080:80`       |                                                              |
 | `kubectl get all`                               |                                                              |
+
+## Aula 3
+
+#### Maneiras de configurar a infraestrutura em nuvem
+
+- Plataforma Web (console) do cloud provider:
+  - Jeito que se faz manualmente, seguindo passo a passo de cliques e configurações pelo navegador. Horrível para replicar e automatizar, sujeito a falhas humanas, difícil de explicar para alguém, etc.
+- Usar comandos via CLI (terminal):
+  - Já é melhor, pode fazer um shell script, é possível replicar.
+  - Mas precisa tomar cuidado com a ordem de execução, verificar se o elemento já existe, etc.
+  - Dá para usar uma linguagem de programação via SDK (Azure SDK, AWS SDK, GCP SDk, etc.). 
+  - Instruções executadas de forma muito interativa
+- Infraestrutura como código
+  - O Terraform trabalha como forma declarativo: você declara o que quer que seja criado e ele cuida disso por baixo dos panos
+    - Ferramenta mais usada do mercado, multi-cloud
+  - A própria declaração da infraestrutura se torna documentação do projeto.
+  - Fácil de replicar, distribuir, etc.
+
+### Terraform ![image-20230129132951233](notebook.assets/image-20230129132951233.png)
+
+- Possui plugins para cada Cloud Provider
+
+  - É possível, inclusive, ter mais de um Cloud Provider no mesmo projeto.
+
+- Terraform vs Ansible
+
+  - Os dois, na realidade, se complementam
+
+  - | Terraform - provisionamento de infraestrutura | Ansible - gerenciamento de configuração      |
+    | --------------------------------------------- | -------------------------------------------- |
+    | Declara os elementos da Infraestrutura        | Configura os elementos da infraestrutura     |
+    | Está relacionado à criação de recursos        | Está relacionado à configuração de recursos. |
+
+- Linguagem usada: Hashicorp Configuration Language
+
+  - Criação do bloco:
+
+    - Block Type
+    - Block Label: nomeações e subtipos do block type. Quantidade varia conforme o Block Type.
+    - Identifiers: especificar parâmetros
+
+  - ```hcl
+    <BLOCK TYPE> "<BLOCK LABEL>" "<BLOCK LABEL>" {
+    	<IDENTIFIER> = <EXPRESSION>
+    }
+    ```
+
+#### Resource
+
+- Representa um recurso criado no cloud provider
+
+- Estrutura: `resource <tipo do resource> <nome do resource> {`
+
+- ```hcl
+  resource "digitalocean_droplet" "maquina_labs_tf" {
+  	image  = "ubuntu-20-04-x64"
+  	name   = "maquina-labs-tf"
+  	region = "nyc1"
+  	size   = "s-1vcpu-2gb"
+  }
+  ```
+
+#### Data Sources
+
+- É um recurso que está no serviço de nuvem mas não faz parte do projeto atual. Já existe e precisa ser referenciado. Ex.: chave ssh, elemento de rede
+
+- ```hcl
+  data "digitalocean_ssh_key" "minha_chave" {
+  	name = "aula"
+  }
+  ```
+
+#### Providers
+
+- ```hcl
+  provider "digitalocean" {
+  	token = ""
+  }
+  ```
+
+#### Terraform Settings
+
+- Configurações do projeto Terraform
+
+- ```hcl
+  terraform {
+  	required_version = ">1.0"
+      required_providers {
+      	digitalocean = {
+  			source = "digitalocean/digitalocean"
+  			version = "2.16.0"
+  		}
+  	}
+  }
+  ```
+
+#### Variables
+
+- ```hcl
+  variable "regiao" {
+  	type = string
+  	default = "nyc1"
+  	description = "Região de uso na Digital Ocean"
+  }
+  ```
+
+#### Outputs
+
+- Quando quiser retorno de resources do projeto
+
+- ```tf
+  output "droplet_id" {
+  	value = digitalocean_droplet.maquina_labs_tf.ipv4_address
+  }
+  ```
+
+### Projeto prático na Digital Ocean
+
+- Cloud provider geralmente mais barato que a AWS
+
+#### Sem usar Terraform
+
+- ![image-20230129140257648](notebook.assets/image-20230129140257648.png)
+
+- ```sh
+  ssh -i .ssh/digital_ocean_1 root@64.227.18.194
+  ```
+
+- Pra conectar ao cluster, baixar o arquivo de configuração fornecido e colar no `~/.kube/config`
+
+  - ![image-20230129141551015](notebook.assets/image-20230129141551015.png)
+  - ![image-20230129143004906](notebook.assets/image-20230129143004906.png)
+  - Esta maneira é via CLI e não é facilmente replicável. 
+  - Acessando o load balancer pelo IP
+    - ![image-20230129144533163](notebook.assets/image-20230129144533163.png)
+
+#### Usando Terraform
+
+- Instalar o Terraform na sua máquina local
+
+- Boa prática começar com o arquivo `main.tf`
+
+- https://registry.terraform.io/
+
+  - Repositório de providers. Cuidado com os da comunidade.
+  - Tem o do Digital Ocean com documentação e setup inicial
+
+- ```hcl
+  terraform {
+    required_providers {
+      digitalocean = {
+        source  = "digitalocean/digitalocean"
+        version = "~> 2.0"
+      }
+    }
+  }
+  
+  provider "digitalocean" {
+    token = "<gerar personal access token>"
+  }
+  
+  # copiar da documentação (terraform repository) e editar
+  resource "digitalocean_droplet" "jenkins" {
+    image  = "ubuntu-22-04-x64"
+    name   = "jenkins"
+    region = "nyc1"
+    size   = "s-2vcpu-2gb"
+    # observar que este campo foi declarado como data source no bloco seguinte
+    ssh_keys = [data.digitalocean_ssh_key.jornada.id]
+  }
+  # vincular uma chave existente ao droplet
+  data "digitalocean_ssh_key" "jornada" {
+    name = "vivobook-key-1-jornadadevops"
+  }
+  
+  resource "digitalocean_kubernetes_cluster" "meucluster" {
+    name    = "meucluster"
+    region  = "nyc1"
+    version = "1.25.4-do.0"
+  
+    node_pool {
+      name       = "default"
+      size       = "s-2vcpu-2gb"
+      node_count = 2
+    }
+  }
+  ```
+  
+- ```sh
+  terraform init
+  ```
+
+  - Inicializa o projeto
+  - ![image-20230129153423342](notebook.assets/image-20230129153423342.png)
+  
+- ```bash
+  terraform apply
+  ```
+
+  - Apresenta um plano de modificações e pede a confirmação
+  - ![image-20230129154000626](notebook.assets/image-20230129154000626.png)
+
+- `terraform.tfstate`: arquivo com informações do estado atual do projeto (preço por hora, endereço ip dos recursos, etc.) É criado após o apply
+
+  - `terraform.tfstate.backup`: histórico dos estados
+
+- `terraform fmt`: formata o código
+
+- `terraform plan:` mostra o plano de execução mas não dá a opção de aplicar.
+
+- `terraform init -upgrade`
+
+- `terraform destroy`
+
+  - Derruba toda a infraestrutura criada pelo projeto
+
+- Observação: o código da aula está melhor do que mostrado neste exemplo, pois possui variáveis definidas em outro arquivo (`terraform.tfvars`)
+
