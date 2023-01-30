@@ -750,6 +750,8 @@
 
   - Derruba toda a infraestrutura criada pelo projeto
 
+- `terraform output`
+
 - Observação: o código da aula está melhor do que mostrado neste exemplo, pois possui variáveis definidas em outro arquivo (`terraform.tfvars`)
 
 ## Aula 4
@@ -800,4 +802,71 @@
 - ![image-20230129184123631](notebook.assets/image-20230129184123631.png)
   - ![image-20230129184008597](notebook.assets/image-20230129184008597.png)
   - Build automático após o push
+
+## Aula 5
+
+### Métricas
+
+- Coleta de parâmetros em formato numérico relacionado ao seu software ou infraestrutura
+
+- Normalmente estes dados numéricos são relacionados a uma linha temporal
+
+- Consumo de CPU, latência
+
+- Métricas de sistema (infra e aplicação)
+
+  - Quantidade de requisições, quantidade de erros, consumo de recursos, APIs mais acessadas, tempo de acesso a um recurso
+
+- Métricas de negócio (usuário)
+
+  - Usuários acessando a aplicação, boletos emitidos, compras de um produto
+  - Precisa estar alinhada com as de sistema, também
+
+- Métrica não é log
+
+  - | Métrica                                            | Logs                                                         |
+    | -------------------------------------------------- | ------------------------------------------------------------ |
+    | Dados numéricos, gráficos, agregações, performance | Dados textuais, mensagens de erro, informação. São buscáveis |
+
+### Prometheus ![image-20230129190526240](notebook.assets/image-20230129190526240.png)
+
+- Criado pela SoundCloud, é open source
+- Possui um TSDB (time series database): é independente
+- Múltiplas formas de visualização (via API, com Grafana, etc.)
+- Configuração de alertas
+- Projeto graduado na CNCF (Cloud Native Computing Foundation), assim como o Kubernetes
+  - Significa que é agnóstico quanto ao ambiente
+- TSDB: blocos de linha temporal. Cada um representa 2h
+  - É possível programar a compactação de dados (ex.: a cada 30 dias) - mas perde precisão
+  - Adapters: armazenar em outros bancos, não está preso ao storage do Prometheus
+- A aplicação expõe as métricas em um endpoint e o Prometheus vai lá e coleta. É uma busca, e não um envio
+- Linguagens suportadas à exposição de métricas
+  - Oficiais: Go, Java, Python, Ruby
+  - Não-oficiais: Bash, C++, .NET, Node.js, etc.
+- Suporte nativo: Grafana, Docker, Kubernetes
+- Sem suporte nativo: MySQL, Jenkins, MongoDB
+  - Tem que usar Exporters: uma mini aplicação de coleta de métricas.
+- Processos rápidos e sem exposição de métricas ficam salvas em um push gateway, que depois são coletados pelo grafana
+- Service Discovery: pegam o endereço IP dinamicamente
+- Alertas
+  - Alert Manager recebe os alertas do Prometheus
+- ![image-20230129191246534](notebook.assets/image-20230129191246534.png)
+- Configuração em arquivo `.yml`
+- Vamos rodar direto no cluster kubernetes
+- ![image-20230129195749490](notebook.assets/image-20230129195749490.png)
+- ![image-20230129205930640](notebook.assets/image-20230129205930640.png)
+
+### Grafana ![image-20230129202612875](notebook.assets/image-20230129202612875.png)
+
+- ```bash
+  kubectl get secret grafana -o jsonpath="{.data.admin.password}" | base64 --decode ; echo
+  ```
+
+- ![image-20230129205855644](notebook.assets/image-20230129205855644.png)
+
+- ![image-20230129205913265](notebook.assets/image-20230129205913265.png)
+
+> fim das aulas em 29/01/2023, domingo, 20:55
+>
+> fui
 
