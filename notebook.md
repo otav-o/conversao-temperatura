@@ -792,7 +792,7 @@
 
 - Entrar no navegador pelo IP e na porta 8080. Configurar por lá
 
-  - Instalar os plugins Docker, Docker Pipeline, Kubernetes CLI
+  - Instalar os plugins: Docker, Docker Pipeline, Kubernetes CLI
   - Configurar uma pipeline simples
     - ![image-20230129175147926](notebook.assets/image-20230129175147926.png)
 
@@ -869,4 +869,149 @@
 > fim das aulas em 29/01/2023, domingo, 20:55
 >
 > fui
+
+## Live: Ansible![image-20230202163107070](notebook.assets/image-20230202163107070.png)
+
+- Ferramenta que permite o setup (configuração) de várias máquinas pelo security shell (ssh). Não precisa ir manualmente rodar os scripts nas máquinas
+  - Complementa o Terraform
+  - Dá para fazer muita coisa: setar banco de dados, criar setup do seu próprio computador (se for Linux), configurar container Docker. Repleto de utilidades.
+  - Baseado em Python.
+
+### Conceitos importantes
+
+#### Módulos
+
+- Bloco de código que representa uma ação a ser executada
+
+- Pode criar usuário, fazer uma instalação, criar diretório, fazer uma cópia, etc.
+
+  - ```yml
+    apt:
+      update_cache: yes
+      name: docker-ce
+      state: present
+    ```
+
+#### Task
+
+- Ação pontual utilizando um módulo
+
+  - ```yml
+    - name: Atualizando os repositórios e instalando o Docker
+      apt:
+        update_cache: yes
+        name: docker-ce
+        state: present
+    ```
+
+- Um conjunto de tarefas é um Play
+
+#### Play
+
+- Conjunto de Tasks com uma ordem específica
+
+  - ```yml
+    - name: Instalação do Docker
+      hosts: jenkins
+      remote_user: root
+      tasks:
+        - name: Instalação dos pré-requisitos
+          apt:
+            name: ca-certificates, curl, gnupg, lsb-release
+            state: latest
+            update_cache: yes
+    
+        - name: Adicionando a chave para o repositório APT
+          apt_key:
+          	repo: https://download.docker.com/linux/ubuntu/gpg
+          	state: present
+         
+         # etc.     
+    ```
+
+- Um ou mais Plays fazem o arquivo Playbook
+
+#### Inventário
+
+- Arquivo que armazena os hosts que serão usados no PlayBook
+
+- ```ini
+  64.225.30.35
+  
+  [nginx]
+  143.198.115.117
+  
+  [docker]
+  167.172.29.187
+  
+  [docker:vars]
+  ansible_ssh_private_key_file=~/.ssh/id_rsa
+  ```
+
+### Ansible Collection
+
+- Mostra categorias e módulos
+- Há módulos de provedores de cloud.
+
+- https://docs.ansible.com/ansible/latest/collections/ansible/builtin/index.html
+  - Ansible Buitin, apt
+
+### Execução do PlayBook
+
+- O Ansible precisa estar instalado na sua máquina (igual o Terraform)
+
+- ```bash
+  ansible-playbook -i hosts playbook.yml
+  ```
+
+  - ```ini
+    [jenkins]
+    198.211.97.186
+    
+    [jenkins:vars]
+    ansible_ssh_private_key_file=~/.ssh/digital_ocean_1
+    ansible_user=root
+    ```
+
+  - ```yaml
+    - name: Instalação do Java
+      hosts: jenkins # foi definido no arquivo de inventário. Poderia ser "all"
+      remote_user: root
+      tasks:
+        - name: Instalando o Java
+          ansible.builtin.apt: # Ver na documentação do Ansible Builtin
+            name: openjdk-11-jdk
+            state: present
+            update_cache: yes
+    
+    - name: Instalação do Jenkins
+      hosts: jenkins
+      remote_user: root
+      tasks:
+        - name: Adicionar a chave do repositório
+          ansible.builtin.apt_key:
+            url: https://pkg.jenkins.io/debian-stable/jenkins.io.key
+            state: present
+    
+        - name: Adicionando o repositório
+          ansible.builtin.apt_repository:
+            repo: "deb https://pkg.jenkins.io/debian-stable binary/"
+            state: present
+    
+        - name: Instalando o Jenkins
+          ansible.builtin.apt:
+            name: jenkins
+            state: present
+            update_cache: yes
+    ```
+
+- ![image-20230202170237181](notebook.assets/image-20230202170237181.png)
+
+- Inventário dinâmico poderia executar o terraform e ansible em sequência
+
+- Criar usuário, instalar plugins, definir credenciais e adicionar o repositório ao Jenkins ainda é uma tarefa manual.
+
+- Repositório: https://github.com/otav-o/kube-news
+
+  - Pastas: "terraform" e "ansible"
 
